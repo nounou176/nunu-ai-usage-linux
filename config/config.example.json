@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "settings": {
+    "display_mode": "left",
+    "refresh_seconds": 60,
+    "widget": {
+      "monitor": "primary",
+      "anchor": "top-right",
+      "margin_x": 32,
+      "margin_y": 32,
+      "keep_visible": true
+    }
+  },
+  "accounts": [
+    {
+      "id": "codex-personal",
+      "provider": "codex",
+      "label": "Personal",
+      "enabled": true,
+      "show_on_widget": true,
+      "connection": {
+        "type": "managed",
+        "profile_id": "codex-personal",
+        "source": "auto"
+      }
+    },
+    {
+      "id": "claude-work",
+      "provider": "claude",
+      "label": "Work",
+      "enabled": true,
+      "show_on_widget": true,
+      "connection": {
+        "type": "managed",
+        "profile_id": "claude-work",
+        "source": "auto"
+      }
+    }
+  ]
+}

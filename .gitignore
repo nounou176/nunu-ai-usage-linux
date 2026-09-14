@@ -1,0 +1,42 @@
+# NUNU runtime data
+runtime/
+state/
+profiles/
+accounts.json
+config.json
+
+# Credentials / sessions
+auth.json
+.credentials.json
+credentials.json
+*.token
+*.cookie
+*.cookies
+*.session
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Logs / cache
+*.log
+.cache/
+__pycache__/
+*.pyc
+
+# Editors
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local development backups
+*.before-*
+
+# Development backup files
+*.before*
+*.bak
+*.backup

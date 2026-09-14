@@ -1,0 +1,7 @@
+{
+    "uuid": "nunu-ai-usage-linux@nunu",
+    "name": "NUNU AI Usage Linux",
+    "description": "Desktop AI usage monitor for Codex and Claude.",
+    "max-instances": "1",
+    "version": "0.1.0"
+}
