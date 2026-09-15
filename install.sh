@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # NUNU AI Usage Linux
-# Per-user installer for Linux Cinnamon.
+# Per-user installer for Linux Mint Cinnamon, Xfce, MATE, and compatible X11 desktops.
 #
 # This installer:
 # - does not require sudo
@@ -42,6 +42,13 @@ CODEXBAR_BIN="$CODEXBAR_ROOT/CodexBarCLI"
 INSTALL_CODEXBAR=1
 ENABLE_DESKLET=1
 
+DESKTOP_KIND="other"
+INSTALL_DESKLET=0
+INSTALL_AUTOSTART=1
+
+AUTOSTART_ROOT="$HOME/.config/autostart"
+AUTOSTART_FILE="$AUTOSTART_ROOT/nunu-ai-usage-widget.desktop"
+
 
 say() {
     printf '%s\n' "$*"
@@ -60,7 +67,7 @@ Usage: ./install.sh [options]
 
 Options:
   --skip-codexbar   Do not install CodexBarCLI when missing.
-  --no-enable       Install the Desklet but do not enable it.
+  --no-enable       Do not automatically enable the Cinnamon Desklet.
   -h, --help        Show this help.
 EOF
 }
@@ -87,6 +94,37 @@ while [ "$#" -gt 0 ]; do
 done
 
 
+detect_desktop() {
+    desktop_name="${XDG_CURRENT_DESKTOP:-${DESKTOP_SESSION:-unknown}}"
+
+    case "$desktop_name" in
+        *Cinnamon*|*cinnamon*)
+            DESKTOP_KIND="cinnamon"
+            INSTALL_DESKLET=1
+            INSTALL_AUTOSTART=0
+            ;;
+        *XFCE*|*Xfce*|*xfce*)
+            DESKTOP_KIND="xfce"
+            INSTALL_DESKLET=0
+            INSTALL_AUTOSTART=1
+            ;;
+        *MATE*|*Mate*|*mate*)
+            DESKTOP_KIND="mate"
+            INSTALL_DESKLET=0
+            INSTALL_AUTOSTART=1
+            ;;
+        *)
+            DESKTOP_KIND="other"
+            INSTALL_DESKLET=0
+            INSTALL_AUTOSTART=1
+            ;;
+    esac
+
+    say "Detected desktop:"
+    say "  $desktop_name -> $DESKTOP_KIND"
+}
+
+
 require_command() {
     command -v "$1" >/dev/null 2>&1 ||
         die "Required command not found: $1"
@@ -103,11 +141,14 @@ check_runtime_dependencies() {
         mv \
         chmod \
         uname \
-        gsettings \
         xrandr
     do
         require_command "$cmd"
     done
+
+    if [ "$INSTALL_DESKLET" -eq 1 ]; then
+        require_command gsettings
+    fi
 
     python3 - <<'PY' >/dev/null 2>&1
 import gi
@@ -130,10 +171,16 @@ PY
         die "gui/account_manager.py not found beside install.sh"
     fi
 
-    if [ ! -f \
-        "$SCRIPT_DIR/desklet/$DESKLET_UUID/desklet.js" \
-    ]; then
-        die "Desklet source not found beside install.sh"
+    if [ ! -f "$SCRIPT_DIR/gui/floating_widget.py" ]; then
+        die "gui/floating_widget.py not found beside install.sh"
+    fi
+
+    if [ "$INSTALL_DESKLET" -eq 1 ]; then
+        if [ ! -f \
+            "$SCRIPT_DIR/desklet/$DESKLET_UUID/desklet.js" \
+        ]; then
+            die "Desklet source not found beside install.sh"
+        fi
     fi
 }
 
@@ -277,6 +324,7 @@ install_launchers() {
 
     BACKEND_TMP="$BIN_ROOT/.nunu-ai-usage.tmp"
     SETTINGS_TMP="$BIN_ROOT/.nunu-ai-usage-settings.tmp"
+    WIDGET_TMP="$BIN_ROOT/.nunu-ai-usage-widget.tmp"
 
     cat > "$BACKEND_TMP" <<'EOF'
 #!/bin/sh
@@ -298,12 +346,24 @@ EOF
 APP="$HOME/.local/share/nunu-ai-usage-linux/app"
 
 PYTHONDONTWRITEBYTECODE=1 \
+PYTHONPATH="$APP/backend" \
 exec python3 "$APP/gui/account_manager.py" "$@"
+EOF
+
+    cat > "$WIDGET_TMP" <<'EOF'
+#!/bin/sh
+
+APP="$HOME/.local/share/nunu-ai-usage-linux/app"
+
+PYTHONDONTWRITEBYTECODE=1 \
+PYTHONPATH="$APP/backend" \
+exec python3 "$APP/gui/floating_widget.py" "$@"
 EOF
 
     chmod 755 \
         "$BACKEND_TMP" \
-        "$SETTINGS_TMP"
+        "$SETTINGS_TMP" \
+        "$WIDGET_TMP"
 
     mv \
         "$BACKEND_TMP" \
@@ -312,10 +372,19 @@ EOF
     mv \
         "$SETTINGS_TMP" \
         "$BIN_ROOT/nunu-ai-usage-settings"
+
+    mv \
+        "$WIDGET_TMP" \
+        "$BIN_ROOT/nunu-ai-usage-widget"
 }
 
 
 install_desklet() {
+    if [ "$INSTALL_DESKLET" -eq 0 ]; then
+        say "Skipping Cinnamon Desklet on $DESKTOP_KIND."
+        return
+    fi
+
     say "Installing Cinnamon Desklet..."
 
     install -d -m 755 "$DESKLET_ROOT"
@@ -340,6 +409,47 @@ install_desklet() {
 
     rm -rf "$DESKLET_DEST"
     mv "$DESKLET_NEW" "$DESKLET_DEST"
+}
+
+
+install_autostart() {
+    if [ "$INSTALL_AUTOSTART" -eq 0 ]; then
+        if [ -f "$AUTOSTART_FILE" ]; then
+            rm -f "$AUTOSTART_FILE"
+            say "Removed floating-widget autostart for Cinnamon:"
+            say "  $AUTOSTART_FILE"
+        else
+            say "Floating-widget autostart is not needed on Cinnamon."
+        fi
+
+        return
+    fi
+
+    say "Installing desktop autostart..."
+
+    install -d -m 700 "$AUTOSTART_ROOT"
+
+    AUTOSTART_TMP="$AUTOSTART_ROOT/.nunu-ai-usage-widget.desktop.tmp"
+
+    cat > "$AUTOSTART_TMP" <<EOF
+[Desktop Entry]
+Type=Application
+Name=NUNU AI Usage
+Comment=Monitor Codex and Claude usage quotas
+Exec=$BIN_ROOT/nunu-ai-usage-widget
+Terminal=false
+Hidden=false
+StartupNotify=false
+EOF
+
+    chmod 644 "$AUTOSTART_TMP"
+
+    mv \
+        "$AUTOSTART_TMP" \
+        "$AUTOSTART_FILE"
+
+    say "Floating widget will start automatically after login:"
+    say "  $AUTOSTART_FILE"
 }
 
 
@@ -608,6 +718,11 @@ PY
 
 
 enable_desklet_if_requested() {
+    if [ "$INSTALL_DESKLET" -eq 0 ]; then
+        say "Cinnamon Desklet enable skipped on $DESKTOP_KIND."
+        return
+    fi
+
     if [ "$ENABLE_DESKLET" -eq 0 ]; then
         say "Desklet enable skipped."
         return
@@ -769,10 +884,12 @@ main() {
     say "NUNU AI Usage Linux installer"
     say "============================="
 
+    detect_desktop
     check_runtime_dependencies
     install_app_files
     install_config
     install_launchers
+    install_autostart
     install_desklet
     install_codexbar_if_needed
     enable_desklet_if_requested
@@ -784,6 +901,15 @@ main() {
     say "Commands:"
     say "  nunu-ai-usage"
     say "  nunu-ai-usage-settings"
+    say "  nunu-ai-usage-widget"
+    say
+    say "Desktop integration:"
+    if [ "$INSTALL_DESKLET" -eq 1 ]; then
+        say "  Cinnamon Desklet"
+    else
+        say "  Universal GTK floating widget"
+        say "  Autostart: $AUTOSTART_FILE"
+    fi
     say
     say "Application:"
     say "  $APP_ROOT"
