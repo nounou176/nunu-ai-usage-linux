@@ -1,3 +1,5 @@
+import re
+
 from nunu_ai_usage.models import (
     UsageSnapshot,
     UsageWindow,
@@ -55,6 +57,59 @@ def display_suffix(mode: str) -> str:
     return "LEFT"
 
 
+def normalize_reset_text(
+    value: str | None,
+) -> str | None:
+    if not isinstance(value, str):
+        return value
+
+    text = value.strip()
+
+    if not text:
+        return text
+
+    # Some providers include their own "Resets" prefix.
+    # Presentation consumers add that label themselves.
+    text = re.sub(
+        r"^resets\s*",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    # Remove provider timezone suffixes such as:
+    #   (Asia/Ho_Chi_Minh)
+    text = re.sub(
+        r"\s*\([A-Za-z_]+(?:/[A-Za-z_+-]+)+\)\s*$",
+        "",
+        text,
+    )
+
+    # Sep16 -> Sep 16
+    text = re.sub(
+        r"\b([A-Za-z]{3})(\d{1,2})\b",
+        r"\1 \2",
+        text,
+    )
+
+    # Sep 16,12pm -> Sep 16, 12pm
+    text = re.sub(
+        r",\s*",
+        ", ",
+        text,
+    )
+
+    # 5:50pm -> 5:50 PM
+    # 12pm    -> 12 PM
+    text = re.sub(
+        r"(?i)\s*(am|pm)\b",
+        lambda match: " " + match.group(1).upper(),
+        text,
+    )
+
+    return text.strip()
+
+
 def present_window(
     window: UsageWindow,
     mode: str,
@@ -87,7 +142,9 @@ def present_window(
             )
         ),
         "reset_at": window.reset_at,
-        "reset_text": window.reset_text,
+        "reset_text": normalize_reset_text(
+            window.reset_text
+        ),
     }
 
 

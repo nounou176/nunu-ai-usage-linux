@@ -3,6 +3,7 @@ from datetime import datetime
 import os
 
 from nunu_ai_usage.account_store import AccountStore
+from nunu_ai_usage.presentation import normalize_reset_text
 from nunu_ai_usage.providers.codex import CodexProvider
 from nunu_ai_usage.providers.claude import ClaudeProvider
 
@@ -59,7 +60,7 @@ def _window_data(window, mode):
         "left_percent": round(left),
         "display_percent": round(percent),
         "display_suffix": mode.upper(),
-        "reset_text": (
+        "reset_text": normalize_reset_text(
             window.reset_text
             or window.reset_at
             or None

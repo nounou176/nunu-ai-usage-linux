@@ -402,10 +402,30 @@ class AccountManager(Gtk.Window):
             "top-right",
         )
 
+        widget_keep_visible = bool(
+            widget_settings.get(
+                "keep_visible",
+                True,
+            )
+        )
+
+        widget_autostart = bool(
+            widget_settings.get(
+                "autostart",
+                True,
+            )
+        )
+
         self._draft_display_mode = display_mode
         self._draft_refresh_seconds = refresh_seconds
         self._draft_widget_monitor = widget_monitor
         self._draft_widget_anchor = widget_anchor
+        self._draft_widget_keep_visible = (
+            widget_keep_visible
+        )
+        self._draft_widget_autostart = (
+            widget_autostart
+        )
         self._settings_dirty = False
         self._updating_monitor_combo = False
 
@@ -460,7 +480,7 @@ class AccountManager(Gtk.Window):
 
         subtitle = Gtk.Label(
             label=(
-                "Manage accounts and your desktop usage display."
+                "Manage accounts and your AI usage widget."
             ),
             xalign=0,
         )
@@ -843,69 +863,35 @@ class AccountManager(Gtk.Window):
             0,
         )
 
-        desktop_title = Gtk.Label(
+        widget_title = Gtk.Label(
             xalign=0,
         )
 
-        desktop_title.set_markup(
-            "<b>Desktop</b>"
+        widget_title.set_markup(
+            "<b>Widget</b>"
         )
 
-        desktop_title.set_margin_top(9)
+        widget_title.set_margin_top(9)
 
         content.pack_start(
-            desktop_title,
+            widget_title,
             False,
             False,
             0,
         )
 
-        desktop_row = Gtk.Box(
+        widget_row = Gtk.Box(
             orientation=Gtk.Orientation.HORIZONTAL,
             spacing=12,
         )
 
-        desktop_row.set_margin_top(2)
-
-        monitor_label = Gtk.Label(
-            label="Monitor",
-        )
-
-        desktop_row.pack_start(
-            monitor_label,
-            False,
-            False,
-            0,
-        )
-
-        self.monitor_combo = Gtk.ComboBoxText()
-
-        self.monitor_combo.set_size_request(
-            180,
-            -1,
-        )
-
-        self._refresh_monitor_combo()
-
-        self.monitor_combo.connect(
-            "changed",
-            self.on_widget_monitor_changed,
-        )
-
-        desktop_row.pack_start(
-            self.monitor_combo,
-            False,
-            False,
-            0,
-        )
+        widget_row.set_margin_top(2)
 
         position_label = Gtk.Label(
             label="Position",
         )
 
-        position_label.set_margin_start(18)
-
-        desktop_row.pack_start(
+        widget_row.pack_start(
             position_label,
             False,
             False,
@@ -943,19 +929,59 @@ class AccountManager(Gtk.Window):
         )
 
         self.position_combo.set_size_request(
-            180,
+            150,
             -1,
         )
 
-        desktop_row.pack_start(
+        widget_row.pack_start(
             self.position_combo,
             False,
             False,
             0,
         )
 
+        self.keep_visible_check = Gtk.CheckButton(
+            label="Keep widget above other windows"
+        )
+
+        self.keep_visible_check.set_active(
+            self._draft_widget_keep_visible
+        )
+
+        self.keep_visible_check.connect(
+            "toggled",
+            self.on_widget_keep_visible_changed,
+        )
+
+        widget_row.pack_start(
+            self.keep_visible_check,
+            False,
+            False,
+            10,
+        )
+
+        self.autostart_check = Gtk.CheckButton(
+            label="Start automatically after login"
+        )
+
+        self.autostart_check.set_active(
+            self._draft_widget_autostart
+        )
+
+        self.autostart_check.connect(
+            "toggled",
+            self.on_widget_autostart_changed,
+        )
+
+        widget_row.pack_start(
+            self.autostart_check,
+            False,
+            False,
+            0,
+        )
+
         content.pack_start(
-            desktop_row,
+            widget_row,
             False,
             False,
             0,
@@ -1018,7 +1044,7 @@ class AccountManager(Gtk.Window):
         )
 
         version = Gtk.Label(
-            label="v0.1.0"
+            label="v0.2.0"
         )
 
         version.get_style_context().add_class(
@@ -1250,6 +1276,85 @@ class AccountManager(Gtk.Window):
         self._mark_settings_dirty()
 
 
+    def on_widget_keep_visible_changed(
+        self,
+        button,
+    ):
+        self._draft_widget_keep_visible = (
+            button.get_active()
+        )
+        self._mark_settings_dirty()
+
+
+    def on_widget_autostart_changed(
+        self,
+        button,
+    ):
+        self._draft_widget_autostart = (
+            button.get_active()
+        )
+        self._mark_settings_dirty()
+
+
+    def _sync_widget_autostart(
+        self,
+        enabled,
+    ):
+        autostart_root = (
+            Path.home()
+            / ".config"
+            / "autostart"
+        )
+
+        autostart_file = (
+            autostart_root
+            / "nunu-ai-usage-widget.desktop"
+        )
+
+        if not enabled:
+            try:
+                autostart_file.unlink()
+            except FileNotFoundError:
+                pass
+
+            return
+
+        autostart_root.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        launcher = (
+            Path.home()
+            / ".local"
+            / "bin"
+            / "nunu-ai-usage-widget"
+        )
+
+        content = (
+            "[Desktop Entry]\n"
+            "Type=Application\n"
+            "Name=NUNU AI Usage\n"
+            "Comment=Monitor Codex and Claude usage quotas\n"
+            f"Exec={launcher}\n"
+            "Terminal=false\n"
+            "Hidden=false\n"
+            "StartupNotify=false\n"
+        )
+
+        temp = autostart_file.with_name(
+            ".nunu-ai-usage-widget.desktop.tmp"
+        )
+
+        temp.write_text(
+            content,
+            encoding="utf-8",
+        )
+
+        temp.chmod(0o644)
+        temp.replace(autostart_file)
+
+
     def on_save_settings(
         self,
         button,
@@ -1307,7 +1412,19 @@ class AccountManager(Gtk.Window):
                 self._draft_widget_anchor
             )
 
+            widget_settings["keep_visible"] = (
+                self._draft_widget_keep_visible
+            )
+
+            widget_settings["autostart"] = (
+                self._draft_widget_autostart
+            )
+
             self.store.save(config)
+
+            self._sync_widget_autostart(
+                self._draft_widget_autostart
+            )
 
             self._settings_dirty = False
             self.save_settings_button.set_sensitive(
@@ -1316,7 +1433,7 @@ class AccountManager(Gtk.Window):
 
             self.status.set_text(
                 "✓ Settings saved. "
-                "Desktop display is refreshing."
+                "Widget settings updated."
             )
 
         except Exception as exc:
