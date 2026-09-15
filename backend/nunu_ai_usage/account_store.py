@@ -26,6 +26,7 @@ class AccountStore:
                     "margin_x": 32,
                     "margin_y": 32,
                     "keep_visible": True,
+                    "autostart": True,
                 },
             },
             "accounts": [],

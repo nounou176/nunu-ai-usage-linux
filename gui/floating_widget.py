@@ -254,12 +254,15 @@ class FloatingWidget(Gtk.Window):
 
         self._refresh_timer = 0
         self._placement_timer = 0
+        self._drag_save_timer = 0
+        self._settings_sync_timer = 0
+        self._runtime_settings_signature = None
         self._refreshing = False
+        self._dragging = False
 
         self.set_name("nunu-window")
         self.set_decorated(False)
         self.set_resizable(False)
-        self.set_keep_above(True)
         self.set_skip_taskbar_hint(True)
         self.set_skip_pager_hint(True)
         self.stick()
@@ -278,6 +281,16 @@ class FloatingWidget(Gtk.Window):
             self.on_size_allocate,
         )
 
+        self.connect(
+            "configure-event",
+            self.on_configure_event,
+        )
+
+        self.connect(
+            "button-release-event",
+            self.on_drag_release,
+        )
+
         screen = self.get_screen()
 
         if screen is not None:
@@ -289,9 +302,74 @@ class FloatingWidget(Gtk.Window):
         self._install_css()
         self._build_ui()
 
+        self._sync_runtime_settings()
+
+        self._settings_sync_timer = (
+            GLib.timeout_add_seconds(
+                2,
+                self._sync_runtime_settings,
+            )
+        )
+
         GLib.idle_add(
             self._refresh_now
         )
+
+    def _sync_runtime_settings(self):
+        config = widget_settings()
+
+        keep_visible = bool(
+            config.get(
+                "keep_visible",
+                True,
+            )
+        )
+
+        self.set_keep_above(
+            keep_visible
+        )
+
+        signature = (
+            str(
+                config.get(
+                    "monitor",
+                    "primary",
+                )
+            ),
+            str(
+                config.get(
+                    "anchor",
+                    "top-right",
+                )
+            ),
+            int(
+                config.get(
+                    "margin_x",
+                    32,
+                )
+            ),
+            int(
+                config.get(
+                    "margin_y",
+                    32,
+                )
+            ),
+            keep_visible,
+        )
+
+        if (
+            signature
+            != self._runtime_settings_signature
+        ):
+            self._runtime_settings_signature = (
+                signature
+            )
+
+            if not self._dragging:
+                self.schedule_placement(20)
+
+        return True
+
 
     def _install_css(self):
         css = b"""
@@ -383,8 +461,27 @@ class FloatingWidget(Gtk.Window):
             "nunu-title"
         )
 
+        drag_handle = Gtk.EventBox()
+        drag_handle.set_visible_window(False)
+        drag_handle.set_tooltip_text(
+            "Drag to move"
+        )
+        drag_handle.add(title)
+        drag_handle.add_events(
+            Gdk.EventMask.BUTTON_PRESS_MASK
+            | Gdk.EventMask.BUTTON_RELEASE_MASK
+        )
+        drag_handle.connect(
+            "button-press-event",
+            self.on_drag_press,
+        )
+        drag_handle.connect(
+            "button-release-event",
+            self.on_drag_release,
+        )
+
         header.pack_start(
-            title,
+            drag_handle,
             True,
             True,
             0,
@@ -862,6 +959,9 @@ class FloatingWidget(Gtk.Window):
     def _apply_placement(self):
         self._placement_timer = 0
 
+        if self._dragging:
+            return False
+
         config = widget_settings()
         monitor = self._resolve_gdk_monitor(config)
         rect = self._monitor_rect(monitor)
@@ -915,6 +1015,243 @@ class FloatingWidget(Gtk.Window):
         self.move(x, y)
         return False
 
+    def _monitor_for_point(self, x, y):
+        display = Gdk.Display.get_default()
+
+        if display is None:
+            return None
+
+        for i in range(display.get_n_monitors()):
+            monitor = display.get_monitor(i)
+
+            if monitor is None:
+                continue
+
+            rect = monitor.get_geometry()
+
+            if (
+                x >= rect.x
+                and x < rect.x + rect.width
+                and y >= rect.y
+                and y < rect.y + rect.height
+            ):
+                return monitor
+
+        return display.get_primary_monitor()
+
+    def _connector_for_monitor(self, monitor):
+        if monitor is None:
+            return "primary"
+
+        rect = monitor.get_geometry()
+
+        for item in xrandr_monitors():
+            if (
+                rect.x == item["x"]
+                and rect.y == item["y"]
+                and rect.width == item["width"]
+                and rect.height == item["height"]
+            ):
+                return item["connector"]
+
+        return "primary"
+
+    def _save_current_position(self):
+        x, y = self.get_position()
+
+        width = self.get_allocated_width()
+        height = self.get_allocated_height()
+
+        if width <= 1 or height <= 1:
+            return
+
+        center_x = x + width // 2
+        center_y = y + height // 2
+
+        monitor = self._monitor_for_point(
+            center_x,
+            center_y,
+        )
+
+        rect = self._monitor_rect(monitor)
+
+        if rect is None:
+            return
+
+        horizontal = (
+            "left"
+            if center_x
+            < rect.x + rect.width / 2
+            else "right"
+        )
+
+        vertical = (
+            "top"
+            if center_y
+            < rect.y + rect.height / 2
+            else "bottom"
+        )
+
+        anchor = (
+            f"{vertical}-{horizontal}"
+        )
+
+        if horizontal == "left":
+            margin_x = x - rect.x
+        else:
+            margin_x = (
+                rect.x
+                + rect.width
+                - x
+                - width
+            )
+
+        if vertical == "top":
+            margin_y = y - rect.y
+        else:
+            margin_y = (
+                rect.y
+                + rect.height
+                - y
+                - height
+            )
+
+        margin_x = max(
+            0,
+            int(margin_x),
+        )
+
+        margin_y = max(
+            0,
+            int(margin_y),
+        )
+
+        config = load_config()
+
+        settings = config.setdefault(
+            "settings",
+            {},
+        )
+
+        widget = settings.setdefault(
+            "widget",
+            {},
+        )
+
+        widget["monitor"] = (
+            self._connector_for_monitor(
+                monitor
+            )
+        )
+
+        widget["anchor"] = anchor
+        widget["margin_x"] = margin_x
+        widget["margin_y"] = margin_y
+
+        CONFIG_PATH.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+            mode=0o700,
+        )
+
+        try:
+            CONFIG_PATH.parent.chmod(0o700)
+        except OSError:
+            pass
+
+        temp_path = CONFIG_PATH.with_name(
+            CONFIG_PATH.name + ".tmp"
+        )
+
+        temp_path.write_text(
+            json.dumps(
+                config,
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        temp_path.chmod(0o600)
+        temp_path.replace(CONFIG_PATH)
+
+        try:
+            CONFIG_PATH.chmod(0o600)
+        except OSError:
+            pass
+
+    def _finish_drag_save(self):
+        self._drag_save_timer = 0
+
+        if not self._dragging:
+            return False
+
+        self._save_current_position()
+        self._dragging = False
+
+        return False
+
+    def _queue_drag_save(self):
+        if self._drag_save_timer:
+            GLib.source_remove(
+                self._drag_save_timer
+            )
+
+        self._drag_save_timer = (
+            GLib.timeout_add(
+                700,
+                self._finish_drag_save,
+            )
+        )
+
+    def on_drag_press(self, widget, event):
+        if event.button != 1:
+            return False
+
+        self._dragging = True
+
+        if self._placement_timer:
+            GLib.source_remove(
+                self._placement_timer
+            )
+            self._placement_timer = 0
+
+        self.begin_move_drag(
+            event.button,
+            int(event.x_root),
+            int(event.y_root),
+            event.time,
+        )
+
+        return True
+
+    def on_drag_release(self, widget, event):
+        if event.button != 1:
+            return False
+
+        if self._drag_save_timer:
+            GLib.source_remove(
+                self._drag_save_timer
+            )
+            self._drag_save_timer = 0
+
+        if self._dragging:
+            self._save_current_position()
+            self._dragging = False
+
+        return False
+
+    def on_configure_event(
+        self,
+        widget,
+        event,
+    ):
+        if self._dragging:
+            self._queue_drag_save()
+
+        return False
+
     def on_refresh_clicked(self, button):
         self._refresh_now()
 
@@ -936,7 +1273,8 @@ class FloatingWidget(Gtk.Window):
         self.destroy()
 
     def on_size_allocate(self, *args):
-        self.schedule_placement(20)
+        if not self._dragging:
+            self.schedule_placement(20)
 
     def on_monitors_changed(self, *args):
         self.schedule_placement(150)
@@ -953,6 +1291,18 @@ class FloatingWidget(Gtk.Window):
                 self._placement_timer
             )
             self._placement_timer = 0
+
+        if self._drag_save_timer:
+            GLib.source_remove(
+                self._drag_save_timer
+            )
+            self._drag_save_timer = 0
+
+        if self._settings_sync_timer:
+            GLib.source_remove(
+                self._settings_sync_timer
+            )
+            self._settings_sync_timer = 0
 
         Gtk.main_quit()
 

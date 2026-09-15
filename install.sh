@@ -49,6 +49,9 @@ INSTALL_AUTOSTART=1
 AUTOSTART_ROOT="$HOME/.config/autostart"
 AUTOSTART_FILE="$AUTOSTART_ROOT/nunu-ai-usage-widget.desktop"
 
+APPLICATIONS_ROOT="$HOME/.local/share/applications"
+APPLICATION_FILE="$APPLICATIONS_ROOT/nunu-ai-usage.desktop"
+
 
 say() {
     printf '%s\n' "$*"
@@ -357,7 +360,7 @@ APP="$HOME/.local/share/nunu-ai-usage-linux/app"
 
 PYTHONDONTWRITEBYTECODE=1 \
 PYTHONPATH="$APP/backend" \
-exec python3 "$APP/gui/floating_widget.py" "$@"
+exec python3 "$APP/gui/floating_widget.py" "$@" </dev/null
 EOF
 
     chmod 755 \
@@ -412,6 +415,77 @@ install_desklet() {
 }
 
 
+install_application_launcher() {
+    say "Installing application menu launcher..."
+
+    install -d -m 755 "$APPLICATIONS_ROOT"
+
+    APPLICATION_TMP="$APPLICATIONS_ROOT/.nunu-ai-usage.desktop.tmp"
+
+    cat > "$APPLICATION_TMP" <<EOF
+[Desktop Entry]
+Type=Application
+Name=NUNU AI Usage
+Comment=Monitor Codex and Claude usage quotas
+Exec=$BIN_ROOT/nunu-ai-usage-widget
+Icon=utilities-system-monitor
+Terminal=false
+StartupNotify=false
+Categories=Utility;System;
+Keywords=AI;Codex;Claude;Usage;Quota;
+EOF
+
+    chmod 644 "$APPLICATION_TMP"
+
+    mv \
+        "$APPLICATION_TMP" \
+        "$APPLICATION_FILE"
+
+    say "Application menu launcher installed:"
+    say "  $APPLICATION_FILE"
+}
+
+
+
+widget_autostart_enabled() {
+    python3 - <<'PYCONFIG'
+import json
+from pathlib import Path
+
+path = (
+    Path.home()
+    / ".config"
+    / "nunu-ai-usage-linux"
+    / "config.json"
+)
+
+enabled = True
+
+try:
+    data = json.loads(
+        path.read_text(encoding="utf-8")
+    )
+
+    enabled = bool(
+        data.get(
+            "settings",
+            {},
+        ).get(
+            "widget",
+            {},
+        ).get(
+            "autostart",
+            True,
+        )
+    )
+except Exception:
+    enabled = True
+
+print("1" if enabled else "0")
+PYCONFIG
+}
+
+
 install_autostart() {
     if [ "$INSTALL_AUTOSTART" -eq 0 ]; then
         if [ -f "$AUTOSTART_FILE" ]; then
@@ -421,6 +495,14 @@ install_autostart() {
         else
             say "Floating-widget autostart is not needed on Cinnamon."
         fi
+
+        return
+    fi
+
+    if [ "$(widget_autostart_enabled)" != "1" ]; then
+        rm -f "$AUTOSTART_FILE"
+
+        say "Floating-widget autostart disabled in settings."
 
         return
     fi
@@ -889,6 +971,7 @@ main() {
     install_app_files
     install_config
     install_launchers
+    install_application_launcher
     install_autostart
     install_desklet
     install_codexbar_if_needed
@@ -913,6 +996,9 @@ main() {
     say
     say "Application:"
     say "  $APP_ROOT"
+    say
+    say "Application menu:"
+    say "  $APPLICATION_FILE"
     say
     say "Config:"
     say "  $CONFIG_FILE"
