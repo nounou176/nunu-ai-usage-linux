@@ -4,10 +4,10 @@
 # Safe per-user uninstaller.
 #
 # Default behavior:
-# - disables only the public NUNU Desklet
-# - removes NUNU application files
-# - removes NUNU launchers
-# - removes NUNU Desklet files
+# - stops the Universal GTK widget when running
+# - disables only the public NUNU Cinnamon Desklet
+# - removes NUNU application files and launchers
+# - removes menu/autostart integration and runtime cache
 # - PRESERVES config
 # - PRESERVES managed login profiles
 # - PRESERVES CodexBarCLI
@@ -29,6 +29,13 @@ BIN_ROOT="$HOME/.local/bin"
 
 BACKEND_LAUNCHER="$BIN_ROOT/nunu-ai-usage"
 SETTINGS_LAUNCHER="$BIN_ROOT/nunu-ai-usage-settings"
+WIDGET_LAUNCHER="$BIN_ROOT/nunu-ai-usage-widget"
+
+APPLICATION_FILE="$HOME/.local/share/applications/nunu-ai-usage.desktop"
+AUTOSTART_FILE="$HOME/.config/autostart/nunu-ai-usage-widget.desktop"
+
+CACHE_ROOT="$HOME/.cache/$APP_ID"
+WIDGET_LOCK="$CACHE_ROOT/widget.lock"
 
 DESKLET_ROOT="$HOME/.local/share/cinnamon/desklets"
 DESKLET_DEST="$DESKLET_ROOT/$DESKLET_UUID"
@@ -108,7 +115,11 @@ safe_remove_file() {
     path="$1"
 
     case "$path" in
-        "$HOME"/.local/bin/*)
+        "$BACKEND_LAUNCHER"|\
+        "$SETTINGS_LAUNCHER"|\
+        "$WIDGET_LAUNCHER"|\
+        "$APPLICATION_FILE"|\
+        "$AUTOSTART_FILE")
             ;;
         *)
             die "Refusing unexpected file path: $path"
@@ -141,6 +152,9 @@ safe_remove_tree() {
         "$HOME"/.local/share/nunu-ai-usage-linux/profiles)
             ;;
 
+        "$HOME"/.cache/nunu-ai-usage-linux)
+            ;;
+
         *)
             die "Refusing unexpected directory path: $path"
             ;;
@@ -153,6 +167,69 @@ safe_remove_tree() {
         say "Removed:"
         say "  $path"
     fi
+}
+
+
+stop_universal_widget() {
+    if [ ! -f "$WIDGET_LOCK" ]; then
+        say "Universal GTK widget is not running."
+        return
+    fi
+
+    pid=$(
+        sed -n '1p' "$WIDGET_LOCK" 2>/dev/null |
+        tr -cd '0-9'
+    )
+
+    if [ -z "$pid" ]; then
+        say "Ignoring invalid widget lock file."
+        return
+    fi
+
+    if ! kill -0 "$pid" 2>/dev/null; then
+        say "Removing stale widget lock."
+        rm -f -- "$WIDGET_LOCK"
+        return
+    fi
+
+    cmdline=$(
+        tr '\0' ' ' \
+            < "/proc/$pid/cmdline" \
+            2>/dev/null \
+            || true
+    )
+
+    case "$cmdline" in
+        *"$APP_ROOT/gui/floating_widget.py"*)
+            ;;
+        *)
+            say "Widget lock PID is not a NUNU widget; process preserved:"
+            say "  PID $pid"
+            return
+            ;;
+    esac
+
+    say "Stopping Universal GTK widget:"
+    say "  PID $pid"
+
+    kill "$pid" 2>/dev/null || true
+
+    count=0
+
+    while kill -0 "$pid" 2>/dev/null; do
+        count=$((count + 1))
+
+        if [ "$count" -ge 20 ]; then
+            say "Warning: widget did not stop within 2 seconds."
+            return
+        fi
+
+        sleep 0.1
+    done
+
+    rm -f -- "$WIDGET_LOCK"
+
+    say "Universal GTK widget stopped."
 }
 
 
@@ -250,6 +327,7 @@ main() {
     say "NUNU AI Usage Linux uninstaller"
     say "==============================="
 
+    stop_universal_widget
     disable_public_desklet
 
     safe_remove_file \
@@ -258,11 +336,23 @@ main() {
     safe_remove_file \
         "$SETTINGS_LAUNCHER"
 
+    safe_remove_file \
+        "$WIDGET_LAUNCHER"
+
+    safe_remove_file \
+        "$APPLICATION_FILE"
+
+    safe_remove_file \
+        "$AUTOSTART_FILE"
+
     safe_remove_tree \
         "$DESKLET_DEST"
 
     safe_remove_tree \
         "$APP_ROOT"
+
+    safe_remove_tree \
+        "$CACHE_ROOT"
 
     if [ "$DELETE_CONFIG" -eq 1 ]; then
         safe_remove_tree \
