@@ -1,8 +1,8 @@
 # NUNU AI Usage Linux
 
-A lightweight Cinnamon desktop widget for viewing AI usage quotas at a glance.
+A lightweight desktop widget for viewing Codex and Claude usage quotas at a glance.
 
-Version: **0.1.0**
+Version: **0.2.0**
 
 ## Features
 
@@ -13,29 +13,76 @@ Version: **0.1.0**
 - LEFT / USED quota display
 - Manual and automatic refresh
 - Account show/hide, rename, reconnect and remove
-- Multi-monitor support
+- Universal GTK floating widget
+- Cinnamon Desklet compatibility
+- Application Menu launcher
+- Optional start automatically after login
+- Keep-above preference
+- Drag and persistent widget placement
+- Multi-monitor-aware placement
 - Four-corner positioning
-- Monitor disconnect/reconnect recovery
-- Safe per-user installation
+- Monitor disconnect/reconnect fallback
+- Safe per-user installation and uninstall
+
+## Desktop integration
+
+NUNU detects the current desktop during installation.
+
+### Xfce and other compatible X11 desktops
+
+NUNU installs the Universal GTK floating widget:
+
+    nunu-ai-usage-widget
+
+It also installs:
+
+    ~/.local/share/applications/nunu-ai-usage.desktop
+    ~/.config/autostart/nunu-ai-usage-widget.desktop
+
+Autostart can be disabled from NUNU Settings.
+
+### Cinnamon
+
+NUNU retains the native Cinnamon Desklet integration from version 0.1.
+
+On Cinnamon, the installer installs the Desklet rather than starting the
+Universal GTK widget automatically.
+
+### MATE
+
+The installer contains a Universal GTK integration path for MATE.
+
+MATE has not yet received the same real-desktop regression validation as Xfce,
+so it should currently be considered compatible but not fully validated.
 
 ## Tested platform
 
-- Linux Mint 22.2
-- Cinnamon 6.4
+Version 0.2.0 release validation:
+
+- Linux Mint
+- Xfce
 - X11
 
-Version 0.1.0 uses XRandR for monitor placement.
+The complete v0.2 install, singleton, autostart preference, configuration
+preservation, uninstall and backend smoke-test flow has been regression-tested
+on Xfce/X11.
+
+Cinnamon Desklet compatibility is retained from v0.1.0. A dedicated v0.2
+Cinnamon regression pass is still pending.
+
+Version 0.2.0 uses XRandR for monitor discovery and placement, so Wayland is
+not currently an officially supported target.
 
 ## Requirements
 
 - Python 3
 - GTK 3 Python bindings
-- Cinnamon
-- gsettings
 - xrandr
 - Codex CLI and/or Claude CLI
 
-NUNU also uses CodexBarCLI for provider usage retrieval.
+Cinnamon additionally requires `gsettings` for automatic Desklet integration.
+
+NUNU uses CodexBarCLI for provider usage retrieval.
 
 CodexBarCLI is not bundled in this repository. The installer can download an
 official upstream Linux release and verify its published SHA-256 checksum.
@@ -60,9 +107,24 @@ Open Settings:
 
     nunu-ai-usage-settings
 
+Open the Universal GTK widget:
+
+    nunu-ai-usage-widget
+
 Print sanitized widget data:
 
     nunu-ai-usage
+
+## Settings
+
+The Settings application can manage:
+
+- LEFT / USED display mode
+- Refresh interval
+- Widget position
+- Keep widget above other windows
+- Start automatically after login
+- Codex and Claude accounts
 
 ## Accounts
 
@@ -87,19 +149,19 @@ Important permissions:
     ~/.local/share/nunu-ai-usage-linux/            0700
     ~/.local/share/nunu-ai-usage-linux/profiles/   0700
 
-## Multi-monitor
+NUNU-managed profiles and provider-native profiles are not removed by the
+default uninstall.
 
-Settings support:
+## Widget placement
 
-- Primary monitor
-- Individual display connectors
-- Top left
-- Top right
-- Bottom left
-- Bottom right
+The Universal GTK widget supports persistent placement and stores its position
+as monitor, anchor and margins.
 
-If a selected external monitor disconnects, NUNU temporarily falls back to
-the primary monitor and returns when the selected monitor reconnects.
+If a configured monitor is unavailable, NUNU falls back to the primary
+monitor.
+
+Multi-monitor code is retained, but the v0.2.0 release regression was performed
+with a single active display.
 
 ## Uninstall
 
@@ -107,8 +169,17 @@ Safe default uninstall:
 
     ./uninstall.sh
 
-By default NUNU preserves configuration, managed provider profiles,
-provider-native profiles, and CodexBarCLI.
+The default uninstall removes NUNU application files, launchers, desktop
+integration, runtime cache and the Cinnamon Desklet when present.
+
+It preserves:
+
+    ~/.config/nunu-ai-usage-linux/
+    ~/.local/share/nunu-ai-usage-linux/profiles/
+    ~/.local/opt/codexbar/
+
+Provider-native profiles such as `~/.codex` and `~/.claude` are also left
+untouched.
 
 Optional destructive cleanup:
 

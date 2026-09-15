@@ -1044,7 +1044,7 @@ class AccountManager(Gtk.Window):
         )
 
         version = Gtk.Label(
-            label="v0.1.0"
+            label="v0.2.0"
         )
 
         version.get_style_context().add_class(
