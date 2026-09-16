@@ -1,23 +1,43 @@
 # NUNU AI Usage Linux
 
-Monitor **Codex** and **Claude** usage directly from your Linux desktop.
+*(Bản tiếng Việt: [README.vi.md](README.vi.md))*
 
-**v0.2.0 · Linux Mint / Xfce / Cinnamon / MATE · X11**
+## What is it for?
 
-![NUNU AI Usage widget](screenshots/2026-09-15_14-31_1.png)
+See your Claude and Codex usage right on your desktop — no terminal needed.
 
-NUNU gives you one small desktop widget for checking AI quota usage across multiple accounts — without opening provider websites.
+![Desktop overview](screenshots/desktop_overview.png)
 
-## What it does
+## Features
 
-- Shows **OpenAI Codex** and **Anthropic Claude** usage in one place
-- Supports **multiple accounts** per provider
-- Displays **5-hour / weekly** usage, reset time, and **USED / LEFT** percentages
-- Runs as a lightweight desktop widget with manual or automatic refresh
-- Lets you choose which accounts appear on the widget
-- Supports existing provider logins and isolated managed profiles
+- View Claude and Codex usage directly on the desktop
+- Support for multiple accounts
+- Freely customize the widget's position and appearance
+- Automatic refresh (manual refresh also available)
+- Multi-monitor support
+- Works with Cinnamon (native Desklet) and Xfce/MATE (Universal GTK widget)
 
-## Quick start
+### Cinnamon
+
+Setting | Display
+:---: | :---:
+![Cinnamon setting](screenshots/cinnamon_setting.png) | ![Cinnamon display](screenshots/cinnamon_display.png)
+
+### Xfce
+
+Setting | Display
+:---: | :---:
+![Xfce setting](screenshots/xfce_setting.png) | ![Xfce display](screenshots/xfce_display.png)
+
+## Requirements
+
+- Python 3
+- GTK 3 Python bindings
+- xrandr
+- Codex CLI and/or Claude CLI (depending on the provider you use)
+- Cinnamon additionally requires `gsettings` for automatic Desklet integration
+
+## Install
 
 ```bash
 git clone https://github.com/nounou176/nunu-ai-usage-linux.git
@@ -26,56 +46,15 @@ chmod +x install.sh
 ./install.sh
 ```
 
-No `sudo` is required.
+No sudo required — the installer works per-user.
 
-After installation:
+## Commands
 
 ```bash
-nunu-ai-usage-widget      # open the desktop widget
-nunu-ai-usage-settings    # manage accounts and widget settings
-nunu-ai-usage             # print sanitized usage data
+nunu-ai-usage-settings   # Open the Settings window
+nunu-ai-usage            # Print usage data
+nunu-ai-usage-widget     # Run the widget manually (Xfce/MATE)
 ```
-
-## Accounts and settings
-
-NUNU can use provider accounts already authenticated on your computer, or create separate managed profiles for additional accounts.
-
-From Settings you can:
-
-- add Codex or Claude accounts
-- show or hide accounts on the widget
-- rename, reconnect, or remove accounts
-- switch between **USED** and **LEFT** display modes
-- change refresh interval
-- configure widget position
-- keep the widget above other windows
-- start the widget automatically after login
-
-## Desktop support
-
-| Desktop | v0.2 behavior | Validation |
-| --- | --- | --- |
-| **Xfce / X11** | Universal GTK floating widget | Fully regression-tested |
-| **Cinnamon / X11** | Native Cinnamon Desklet | Compatibility retained from v0.1 |
-| **MATE / X11** | Universal GTK floating widget | Supported path, not yet fully real-session tested |
-| **Wayland** | Not an official v0.2 target | XRandR-based placement currently targets X11 |
-
-## Privacy
-
-NUNU is designed to keep credentials in provider-owned or isolated provider profiles rather than copying secrets into the app config.
-
-It does **not** store your provider password in the main NUNU configuration.
-
-Default uninstall also preserves:
-
-```text
-~/.config/nunu-ai-usage-linux/
-~/.local/share/nunu-ai-usage-linux/profiles/
-~/.codex/
-~/.claude/
-```
-
-CodexBarCLI is also left untouched by the uninstaller.
 
 ## Uninstall
 
@@ -83,26 +62,12 @@ CodexBarCLI is also left untouched by the uninstaller.
 ./uninstall.sh
 ```
 
-By default this removes NUNU application files, launchers, desktop integration, and runtime cache while preserving configuration and provider profiles.
+By default, configuration, saved accounts and CodexBarCLI are preserved.
+See `./uninstall.sh --help` for all options.
 
-Optional cleanup:
+## Documentation
 
-```bash
-./uninstall.sh --delete-config
-./uninstall.sh --delete-profiles
-```
-
-## v0.2 highlights
-
-- Universal GTK desktop widget
-- Xfce desktop integration
-- Application Menu launcher
-- XDG autostart support
-- Widget singleton protection
-- Drag-and-save widget placement
-- Keep-above and start-after-login preferences
-- Safer universal uninstaller
-- Normalized reset-time display for Codex and Claude
+See the `docs/` directory for installation, provider and account details.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
